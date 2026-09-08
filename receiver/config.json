@@ -1,0 +1,7 @@
+{
+  "cloudWsUrl": "ws://localhost:5000",
+  "reconnectDelaySeconds": 3,
+  "maxReconnectAttempts": 50,
+  "maxDelta": 300,
+  "maxScroll": 100
+}

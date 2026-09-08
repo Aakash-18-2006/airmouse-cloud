@@ -1,0 +1,30 @@
+{
+  "name": "airmouse-cloud-root",
+  "version": "1.0.0",
+  "private": true,
+  "description": "AirMouse Cloud - Control your Windows PC cursor from your phone over the web",
+  "scripts": {
+    "install:all": "npm install --prefix server && npm install --prefix client",
+    "start": "npm run start --prefix server",
+    "start:server": "npm run start --prefix server",
+    "dev": "npm run dev:server",
+    "dev:server": "npm run dev --prefix server",
+    "dev:client": "npm run dev --prefix client",
+    "receiver": "py receiver/receiver.py",
+    "build:server": "npm run build --prefix server",
+    "build:client": "npm run build --prefix client",
+    "build:all": "npm run build:server && npm run build:client",
+    "test:server": "npm test --prefix server",
+    "test:receiver": "py -m unittest discover -s receiver/tests",
+    "test:all": "npm run test:server && npm run test:receiver"
+  },
+  "keywords": [
+    "airmouse",
+    "remote-mouse",
+    "trackpad",
+    "websocket",
+    "touchpad"
+  ],
+  "author": "",
+  "license": "MIT"
+}
