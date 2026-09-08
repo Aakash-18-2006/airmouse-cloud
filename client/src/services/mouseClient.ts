@@ -1,4 +1,10 @@
-import { ConnectionStatus, MouseEventPayload, SessionInfo } from '../types/protocol';
+import {
+  ConnectionStatus,
+  MouseEventPayload,
+  SessionInfo,
+  KeyboardEventPayload,
+  KeyboardModifier
+} from '../types/protocol';
 
 export class MouseClient {
   private ws: WebSocket | null = null;
@@ -243,6 +249,60 @@ export class MouseClient {
 
   public sendScroll(amount: number): void {
     this.sendCommand({ type: 'scroll', amount: Math.round(amount) });
+  }
+
+  public sendKeyPress(key: string): void {
+    this.sendKeyboardCommand({
+      action: 'key_press',
+      key
+    });
+  }
+
+  public sendHotkey(key: string, modifiers: KeyboardModifier[]): void {
+    this.sendKeyboardCommand({
+      action: 'hotkey',
+      key,
+      modifiers
+    });
+  }
+
+  public sendTypeText(text: string): void {
+    if (!text) return;
+    this.sendKeyboardCommand({
+      action: 'type_text',
+      text
+    });
+  }
+
+  public sendKeyDown(key: string): void {
+    this.sendKeyboardCommand({
+      action: 'key_down',
+      key
+    });
+  }
+
+  public sendKeyUp(key: string): void {
+    this.sendKeyboardCommand({
+      action: 'key_up',
+      key
+    });
+  }
+
+  private sendKeyboardCommand(payload: KeyboardEventPayload): void {
+    if (this.status !== 'connected' || !this.ws || !this.sessionToken) return;
+
+    this.seq += 1;
+    payload.seq = this.seq;
+
+    const message = {
+      type: 'keyboard_event',
+      sessionToken: this.sessionToken,
+      keyPayload: payload
+    };
+
+    if (this.ws.readyState === WebSocket.OPEN) {
+      this.ws.send(JSON.stringify(message));
+    }
   }
 
   public sendEmergencyStop(): void {

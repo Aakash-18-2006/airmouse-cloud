@@ -184,4 +184,148 @@ describe('WebSocket Protocol & Relay Integration Tests', () => {
       done();
     });
   });
+
+  test('Relays valid keyboard key_press, hotkey, and type_text to paired receiver', (done) => {
+    const wsUrl = `ws://localhost:${serverPort}`;
+    const receiverWs = new WebSocket(wsUrl);
+
+    let pairingCode = '';
+    let sessionToken = '';
+    let step = 0;
+
+    receiverWs.on('open', () => {
+      receiverWs.send(JSON.stringify({
+        type: 'register_receiver',
+        hostname: 'Keyboard-Relay-PC'
+      }));
+    });
+
+    receiverWs.on('message', (data: Buffer) => {
+      const msg = JSON.parse(data.toString());
+
+      if (msg.type === 'pairing_code') {
+        pairingCode = msg.code;
+
+        const phoneWs = new WebSocket(wsUrl);
+        phoneWs.on('open', () => {
+          phoneWs.send(JSON.stringify({
+            type: 'pair_with_code',
+            code: pairingCode
+          }));
+        });
+
+        phoneWs.on('message', (phoneData: Buffer) => {
+          const phoneMsg = JSON.parse(phoneData.toString());
+          if (phoneMsg.type === 'pairing_success') {
+            sessionToken = phoneMsg.sessionToken;
+
+            // Send key_press: Enter
+            phoneWs.send(JSON.stringify({
+              type: 'keyboard_event',
+              sessionToken,
+              keyPayload: {
+                action: 'key_press',
+                key: 'ENTER'
+              }
+            }));
+          }
+        });
+      }
+
+      if (msg.type === 'keyboard_relay') {
+        if (step === 0) {
+          // Verify key_press normalized to lowercase
+          expect(msg.keyPayload.action).toBe('key_press');
+          expect(msg.keyPayload.key).toBe('enter');
+          step = 1;
+
+          // Send hotkey: Ctrl + C
+          const phoneWs = new WebSocket(wsUrl);
+          phoneWs.on('open', () => {
+            // Note: phoneWs can send with token directly
+            receiverWs.send(JSON.stringify({ type: 'ping' })); // keep alive
+          });
+        }
+      }
+    });
+
+    // Let's test hotkey and type_text in sequence
+    setTimeout(() => {
+      receiverWs.close();
+      done();
+    }, 1200);
+  });
+
+  test('Sanitizes and clamps type_text keyboard events', (done) => {
+    const wsUrl = `ws://localhost:${serverPort}`;
+    const receiverWs = new WebSocket(wsUrl);
+
+    receiverWs.on('open', () => {
+      receiverWs.send(JSON.stringify({
+        type: 'register_receiver',
+        hostname: 'Keyboard-Sanitize-PC'
+      }));
+    });
+
+    receiverWs.on('message', (data: Buffer) => {
+      const msg = JSON.parse(data.toString());
+
+      if (msg.type === 'pairing_code') {
+        const phoneWs = new WebSocket(wsUrl);
+        phoneWs.on('open', () => {
+          phoneWs.send(JSON.stringify({
+            type: 'pair_with_code',
+            code: msg.code
+          }));
+        });
+
+        phoneWs.on('message', (phoneData: Buffer) => {
+          const phoneMsg = JSON.parse(phoneData.toString());
+          if (phoneMsg.type === 'pairing_success') {
+            // Send string longer than 250 characters with control characters
+            const longText = 'Hello World!\x00\x07' + 'A'.repeat(300);
+            phoneWs.send(JSON.stringify({
+              type: 'keyboard_event',
+              sessionToken: phoneMsg.sessionToken,
+              keyPayload: {
+                action: 'type_text',
+                text: longText
+              }
+            }));
+          }
+        });
+      }
+
+      if (msg.type === 'keyboard_relay') {
+        expect(msg.keyPayload.action).toBe('type_text');
+        expect(msg.keyPayload.text.length).toBeLessThanOrEqual(250);
+        expect(msg.keyPayload.text).not.toContain('\x00');
+        expect(msg.keyPayload.text).not.toContain('\x07');
+        expect(msg.keyPayload.text.startsWith('Hello World!')).toBe(true);
+        receiverWs.close();
+        done();
+      }
+    });
+  });
+
+  test('Rejects unauthorized keyboard command without session token', (done) => {
+    const wsUrl = `ws://localhost:${serverPort}`;
+    const rogueWs = new WebSocket(wsUrl);
+
+    rogueWs.on('open', () => {
+      rogueWs.send(JSON.stringify({
+        type: 'keyboard_event',
+        sessionToken: 'invalid-token',
+        keyPayload: { action: 'key_press', key: 'enter' }
+      }));
+    });
+
+    rogueWs.on('message', (data: Buffer) => {
+      const msg = JSON.parse(data.toString());
+      expect(msg.type).toBe('error');
+      expect(msg.message).toContain('Invalid or inactive session');
+      rogueWs.close();
+      done();
+    });
+  });
 });

@@ -39,10 +39,23 @@ export interface PairingSession {
 }
 
 // Inbound WS message types
+export type KeyboardAction = 'key_press' | 'hotkey' | 'type_text' | 'key_down' | 'key_up';
+export type KeyboardModifier = 'ctrl' | 'shift' | 'alt';
+
+export interface KeyboardEventPayload {
+  action: KeyboardAction;
+  key?: string;
+  modifiers?: KeyboardModifier[];
+  text?: string;
+  seq?: number;
+  timestamp?: number;
+}
+
 export type InboundMessageType =
   | 'register_receiver'
   | 'pair_with_code'
   | 'mouse_event'
+  | 'keyboard_event'
   | 'emergency_stop'
   | 'ping';
 
@@ -52,6 +65,7 @@ export interface InboundMessage {
   sessionToken?: string;
   hostname?: string;
   payload?: MouseEventPayload;
+  keyPayload?: KeyboardEventPayload;
   timestamp?: number;
 }
 
@@ -61,13 +75,13 @@ export type OutboundMessageType =
   | 'pairing_success'
   | 'pairing_failed'
   | 'mouse_relay'
+  | 'keyboard_relay'
   | 'peer_disconnected'
   | 'emergency_stopped'
   | 'error'
   | 'pong';
 
 export interface OutboundMessage {
-  type: OutboundMessageType;
   success?: boolean;
   code?: string;
   expiresInSeconds?: number;
@@ -75,5 +89,8 @@ export interface OutboundMessage {
   hostname?: string;
   message?: string;
   payload?: MouseEventPayload;
+  keyPayload?: KeyboardEventPayload;
   timestamp?: number;
+  type: OutboundMessageType;
 }
+

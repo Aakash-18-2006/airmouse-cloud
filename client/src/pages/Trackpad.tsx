@@ -1,15 +1,17 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { mouseClient } from '../services/mouseClient';
 import { TouchSurface } from '../components/TouchSurface';
+import { KeyboardSurface } from '../components/KeyboardSurface';
 import { SensitivityModal } from '../components/SensitivityModal';
 import { ConnectionStatus } from '../types/protocol';
-import { Sliders, Power, AlertCircle, RefreshCw } from 'lucide-react';
+import { Sliders, Power, AlertCircle, RefreshCw, MousePointer, Keyboard } from 'lucide-react';
 
 interface TrackpadProps {
   onNavigate: (page: string) => void;
 }
 
 export const Trackpad: React.FC<TrackpadProps> = ({ onNavigate }) => {
+  const [activeTab, setActiveTab] = useState<'trackpad' | 'keyboard'>('trackpad');
   const [status, setStatus] = useState<ConnectionStatus>(mouseClient.getStatus());
   const [sessionInfo, setSessionInfo] = useState(mouseClient.getSessionInfo());
   const [sensitivity, setSensitivity] = useState<number>(() => {
@@ -180,6 +182,74 @@ export const Trackpad: React.FC<TrackpadProps> = ({ onNavigate }) => {
         </div>
       </div>
 
+      {/* Mode Switcher: Trackpad vs Keyboard */}
+      <div
+        className="glass-panel"
+        style={{
+          display: 'grid',
+          gridTemplateColumns: '1fr 1fr',
+          padding: '4px',
+          borderRadius: 'var(--radius-full)',
+          flexShrink: 0,
+        }}
+      >
+        <button
+          onClick={() => {
+            triggerHaptic(20);
+            setActiveTab('trackpad');
+          }}
+          style={{
+            padding: '8px 16px',
+            borderRadius: 'var(--radius-full)',
+            border: 'none',
+            fontSize: '0.88rem',
+            fontWeight: 700,
+            cursor: 'pointer',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: '8px',
+            color: activeTab === 'trackpad' ? '#ffffff' : 'var(--text-secondary)',
+            background: activeTab === 'trackpad'
+              ? 'linear-gradient(135deg, #0284c7 0%, #2563eb 100%)'
+              : 'transparent',
+            boxShadow: activeTab === 'trackpad' ? '0 2px 10px rgba(2, 132, 199, 0.4)' : 'none',
+            transition: 'all 0.2s ease',
+          }}
+        >
+          <MousePointer size={15} />
+          <span>Trackpad</span>
+        </button>
+
+        <button
+          onClick={() => {
+            triggerHaptic(20);
+            setActiveTab('keyboard');
+          }}
+          style={{
+            padding: '8px 16px',
+            borderRadius: 'var(--radius-full)',
+            border: 'none',
+            fontSize: '0.88rem',
+            fontWeight: 700,
+            cursor: 'pointer',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: '8px',
+            color: activeTab === 'keyboard' ? '#ffffff' : 'var(--text-secondary)',
+            background: activeTab === 'keyboard'
+              ? 'linear-gradient(135deg, #0284c7 0%, #2563eb 100%)'
+              : 'transparent',
+            boxShadow: activeTab === 'keyboard' ? '0 2px 10px rgba(2, 132, 199, 0.4)' : 'none',
+            transition: 'all 0.2s ease',
+          }}
+        >
+          <Keyboard size={15} />
+          <span>Keyboard</span>
+        </button>
+      </div>
+
       {/* Disconnect Alert Banner if connection lost */}
       {disconnectReason && (
         <div
@@ -211,81 +281,90 @@ export const Trackpad: React.FC<TrackpadProps> = ({ onNavigate }) => {
         </div>
       )}
 
-      {/* Main Responsive Trackpad Surface */}
-      <div style={{ flex: 1, minHeight: 0, width: '100%' }}>
-        <TouchSurface sensitivity={sensitivity} />
-      </div>
+      {/* Dynamic Content Area: Trackpad vs Keyboard */}
+      {activeTab === 'trackpad' ? (
+        <>
+          {/* Main Responsive Trackpad Surface */}
+          <div style={{ flex: 1, minHeight: 0, width: '100%' }}>
+            <TouchSurface sensitivity={sensitivity} />
+          </div>
 
-      {/* Bottom Physical Buttons */}
-      <div
-        style={{
-          display: 'grid',
-          gridTemplateColumns: '1fr 1fr',
-          gap: '12px',
-          height: '74px',
-          flexShrink: 0,
-        }}
-      >
-        <button
-          onClick={() => {
-            triggerHaptic(30);
-            mouseClient.sendLeftClick();
-          }}
-          className="glass-panel"
-          style={{
-            background: 'linear-gradient(180deg, rgba(30, 41, 59, 0.9) 0%, rgba(15, 23, 42, 0.95) 100%)',
-            border: '1px solid rgba(255, 255, 255, 0.12)',
-            borderRadius: 'var(--radius-md)',
-            color: 'var(--text-primary)',
-            fontSize: '1rem',
-            fontWeight: 700,
-            letterSpacing: '0.05em',
-            cursor: 'pointer',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            userSelect: 'none',
-            WebkitUserSelect: 'none',
-            touchAction: 'manipulation',
-            boxShadow: '0 4px 12px rgba(0, 0, 0, 0.4)',
-            transition: 'transform 0.1s, border-color 0.1s',
-          }}
-          onPointerDown={(e) => (e.currentTarget.style.transform = 'scale(0.97)')}
-          onPointerUp={(e) => (e.currentTarget.style.transform = 'scale(1)')}
-        >
-          LEFT CLICK
-        </button>
+          {/* Bottom Physical Buttons */}
+          <div
+            style={{
+              display: 'grid',
+              gridTemplateColumns: '1fr 1fr',
+              gap: '12px',
+              height: '74px',
+              flexShrink: 0,
+            }}
+          >
+            <button
+              onClick={() => {
+                triggerHaptic(30);
+                mouseClient.sendLeftClick();
+              }}
+              className="glass-panel"
+              style={{
+                background: 'linear-gradient(180deg, rgba(30, 41, 59, 0.9) 0%, rgba(15, 23, 42, 0.95) 100%)',
+                border: '1px solid rgba(255, 255, 255, 0.12)',
+                borderRadius: 'var(--radius-md)',
+                color: 'var(--text-primary)',
+                fontSize: '1rem',
+                fontWeight: 700,
+                letterSpacing: '0.05em',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                userSelect: 'none',
+                WebkitUserSelect: 'none',
+                touchAction: 'manipulation',
+                boxShadow: '0 4px 12px rgba(0, 0, 0, 0.4)',
+                transition: 'transform 0.1s, border-color 0.1s',
+              }}
+              onPointerDown={(e) => (e.currentTarget.style.transform = 'scale(0.97)')}
+              onPointerUp={(e) => (e.currentTarget.style.transform = 'scale(1)')}
+            >
+              LEFT CLICK
+            </button>
 
-        <button
-          onClick={() => {
-            triggerHaptic(30);
-            mouseClient.sendRightClick();
-          }}
-          className="glass-panel"
-          style={{
-            background: 'linear-gradient(180deg, rgba(30, 41, 59, 0.9) 0%, rgba(15, 23, 42, 0.95) 100%)',
-            border: '1px solid rgba(255, 255, 255, 0.12)',
-            borderRadius: 'var(--radius-md)',
-            color: 'var(--text-primary)',
-            fontSize: '1rem',
-            fontWeight: 700,
-            letterSpacing: '0.05em',
-            cursor: 'pointer',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            userSelect: 'none',
-            WebkitUserSelect: 'none',
-            touchAction: 'manipulation',
-            boxShadow: '0 4px 12px rgba(0, 0, 0, 0.4)',
-            transition: 'transform 0.1s, border-color 0.1s',
-          }}
-          onPointerDown={(e) => (e.currentTarget.style.transform = 'scale(0.97)')}
-          onPointerUp={(e) => (e.currentTarget.style.transform = 'scale(1)')}
-        >
-          RIGHT CLICK
-        </button>
-      </div>
+            <button
+              onClick={() => {
+                triggerHaptic(30);
+                mouseClient.sendRightClick();
+              }}
+              className="glass-panel"
+              style={{
+                background: 'linear-gradient(180deg, rgba(30, 41, 59, 0.9) 0%, rgba(15, 23, 42, 0.95) 100%)',
+                border: '1px solid rgba(255, 255, 255, 0.12)',
+                borderRadius: 'var(--radius-md)',
+                color: 'var(--text-primary)',
+                fontSize: '1rem',
+                fontWeight: 700,
+                letterSpacing: '0.05em',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                userSelect: 'none',
+                WebkitUserSelect: 'none',
+                touchAction: 'manipulation',
+                boxShadow: '0 4px 12px rgba(0, 0, 0, 0.4)',
+                transition: 'transform 0.1s, border-color 0.1s',
+              }}
+              onPointerDown={(e) => (e.currentTarget.style.transform = 'scale(0.97)')}
+              onPointerUp={(e) => (e.currentTarget.style.transform = 'scale(1)')}
+            >
+              RIGHT CLICK
+            </button>
+          </div>
+        </>
+      ) : (
+        <div style={{ flex: 1, minHeight: 0, width: '100%', overflow: 'hidden' }}>
+          <KeyboardSurface />
+        </div>
+      )}
 
       {/* Sensitivity Settings Modal */}
       <SensitivityModal

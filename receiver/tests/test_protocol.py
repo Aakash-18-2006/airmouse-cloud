@@ -154,5 +154,72 @@ class TestAirMouseReceiverProtocol(unittest.TestCase):
         self.receiver.handle_command(payload)
         mock_move.assert_not_called()
 
+    @patch('pyautogui.press')
+    def test_keyboard_key_press_valid(self, mock_press):
+        test_keys = ['enter', 'backspace', 'space', 'tab', 'esc', 'up', 'down', 'left', 'right',
+                     'delete', 'home', 'end', 'pageup', 'pagedown', 'a', 'z', '0', '9']
+        for k in test_keys:
+            self.receiver.handle_keyboard_command({"action": "key_press", "key": k})
+            mock_press.assert_called_with(k, _pause=False)
+
+    @patch('pyautogui.press')
+    def test_keyboard_key_press_escape_alias(self, mock_press):
+        self.receiver.handle_keyboard_command({"action": "key_press", "key": "escape"})
+        mock_press.assert_called_with("esc", _pause=False)
+
+    @patch('pyautogui.hotkey')
+    def test_keyboard_hotkey(self, mock_hotkey):
+        self.receiver.handle_keyboard_command({
+            "action": "hotkey",
+            "modifiers": ["ctrl"],
+            "key": "c"
+        })
+        mock_hotkey.assert_called_once_with("ctrl", "c", _pause=False)
+
+    @patch('pyautogui.write')
+    def test_keyboard_type_text(self, mock_write):
+        self.receiver.handle_keyboard_command({
+            "action": "type_text",
+            "text": "Hello World 123!\x00\x07"
+        })
+        # Verifies control characters \x00 and \x07 are stripped
+        mock_write.assert_called_once_with("Hello World 123!", interval=0.005)
+
+    @patch('pyautogui.keyDown')
+    @patch('pyautogui.keyUp')
+    def test_keyboard_key_down_up_and_emergency_release(self, mock_keyup, mock_keydown):
+        self.receiver.handle_keyboard_command({"action": "key_down", "key": "shift"})
+        mock_keydown.assert_called_once_with("shift", _pause=False)
+        self.assertIn("shift", self.receiver.held_keys)
+
+        # Emergency stop should release shift and all modifiers
+        self.receiver.emergency_stop()
+        self.assertEqual(len(self.receiver.held_keys), 0)
+        self.assertTrue(mock_keyup.called)
+
+    @patch('pyautogui.press')
+    @patch('pyautogui.hotkey')
+    @patch('pyautogui.write')
+    def test_keyboard_malicious_commands_rejected(self, mock_write, mock_hotkey, mock_press):
+        # Arbitrary OS or shell commands must be strictly rejected
+        dangerous_payloads = [
+            {"action": "key_press", "key": "powershell.exe"},
+            {"action": "key_press", "key": "cmd.exe"},
+            {"action": "key_press", "key": "format c:"},
+            {"action": "unknown_action", "key": "enter"},
+            {"action": "hotkey", "modifiers": ["sudo"], "key": "rm -rf"},
+        ]
+        for p in dangerous_payloads:
+            self.receiver.handle_keyboard_command(p)
+        mock_press.assert_not_called()
+        mock_hotkey.assert_not_called()
+        mock_write.assert_not_called()
+
+    @patch('pyautogui.press')
+    def test_keyboard_relay_via_on_message(self, mock_press):
+        msg = '{"type": "keyboard_relay", "keyPayload": {"action": "key_press", "key": "enter"}}'
+        self.receiver.on_message(None, msg)
+        mock_press.assert_called_once_with("enter", _pause=False)
+
 if __name__ == '__main__':
     unittest.main()

@@ -49,6 +49,20 @@ except ImportError:
 pyautogui.PAUSE = PYAUTOGUI_PAUSE
 pyautogui.FAILSAFE = PYAUTOGUI_FAILSAFE
 
+ALLOWED_RECEIVER_KEYS = {
+    # Letters A-Z
+    *(chr(c) for c in range(ord('a'), ord('z') + 1)),
+    # Numbers 0-9
+    *(str(i) for i in range(10)),
+    # Navigation & control keys
+    'space', 'enter', 'backspace', 'tab', 'esc', 'escape',
+    'up', 'down', 'left', 'right',
+    'shift', 'ctrl', 'alt',
+    'delete', 'home', 'end', 'pageup', 'pagedown'
+}
+
+ALLOWED_RECEIVER_MODIFIERS = {'ctrl', 'shift', 'alt'}
+
 class AirMouseReceiver:
     def __init__(self, server_url=DEFAULT_SERVER_URL, enable_gui=True):
         self.server_url = server_url.strip() if server_url else ""
@@ -62,6 +76,7 @@ class AirMouseReceiver:
         self.phone_connected = False
         self.session_token = None
         self.gui_overlay = None
+        self.held_keys = set()
         self._lock = threading.Lock()
         self._stopped_by_user = False
 
@@ -111,6 +126,21 @@ class AirMouseReceiver:
             pyautogui.mouseUp(button='right', _pause=False)
         except Exception:
             pass
+
+        # Release any held keyboard keys & modifiers safely
+        with self._lock:
+            held = list(self.held_keys)
+            self.held_keys.clear()
+        for k in held:
+            try:
+                pyautogui.keyUp(k, _pause=False)
+            except Exception:
+                pass
+        for mod in ('shift', 'ctrl', 'alt'):
+            try:
+                pyautogui.keyUp(mod, _pause=False)
+            except Exception:
+                pass
 
         # Send emergency stop packet to server relay
         if self.ws and self.ws.sock and self.ws.sock.connected:
@@ -186,6 +216,69 @@ class AirMouseReceiver:
             # Prevent receiver from crashing on any unexpected input hiccup
             pass
 
+    def handle_keyboard_command(self, payload):
+        """
+        Dispatches validated keyboard commands via PyAutoGUI.
+        Whitelists all keys and modifiers to prevent arbitrary shell/OS command execution.
+        Never logs or stores sensitive keyboard content.
+        """
+        if not self.control_enabled or not payload:
+            return
+
+        action = str(payload.get("action", "")).lower().strip()
+        if not action:
+            return
+
+        try:
+            if action == "key_press":
+                raw_key = str(payload.get("key", "")).lower().strip()
+                key = "esc" if raw_key == "escape" else raw_key
+                if key in ALLOWED_RECEIVER_KEYS:
+                    pyautogui.press(key, _pause=False)
+
+            elif action == "hotkey":
+                raw_key = str(payload.get("key", "")).lower().strip()
+                key = "esc" if raw_key == "escape" else raw_key
+                raw_mods = payload.get("modifiers", [])
+                mods = [str(m).lower().strip() for m in raw_mods if str(m).lower().strip() in ALLOWED_RECEIVER_MODIFIERS]
+                if key in ALLOWED_RECEIVER_KEYS and mods:
+                    pyautogui.hotkey(*mods, key, _pause=False)
+                elif key in ALLOWED_RECEIVER_KEYS:
+                    pyautogui.press(key, _pause=False)
+
+            elif action == "type_text":
+                raw_text = payload.get("text")
+                if not isinstance(raw_text, str):
+                    return
+                # Clamp length to 250 max and strip unsafe control chars
+                safe_text = raw_text[:250]
+                safe_text = "".join(
+                    c for c in safe_text
+                    if c in ("\n", "\t") or (ord(c) >= 32 and ord(c) != 127)
+                )
+                if safe_text:
+                    pyautogui.write(safe_text, interval=0.005)
+
+            elif action == "key_down":
+                raw_key = str(payload.get("key", "")).lower().strip()
+                key = "esc" if raw_key == "escape" else raw_key
+                if key in ALLOWED_RECEIVER_KEYS:
+                    pyautogui.keyDown(key, _pause=False)
+                    with self._lock:
+                        self.held_keys.add(key)
+
+            elif action == "key_up":
+                raw_key = str(payload.get("key", "")).lower().strip()
+                key = "esc" if raw_key == "escape" else raw_key
+                if key in ALLOWED_RECEIVER_KEYS or key in self.held_keys:
+                    pyautogui.keyUp(key, _pause=False)
+                    with self._lock:
+                        self.held_keys.discard(key)
+
+        except Exception:
+            # Prevent receiver from crashing on any keyboard input issue
+            pass
+
     def on_message(self, ws, message):
         try:
             data = json.loads(message)
@@ -216,16 +309,33 @@ class AirMouseReceiver:
                 payload = data.get("payload", {})
                 self.handle_command(payload)
 
+            elif msg_type == "keyboard_relay":
+                key_payload = data.get("keyPayload", {})
+                self.handle_keyboard_command(key_payload)
+
             elif msg_type == "peer_disconnected":
                 # Automatically stop control when phone disconnects
                 self.phone_connected = False
                 self.control_enabled = False
-                # Release any stuck mouse button
+                # Release any stuck mouse button or keyboard keys
                 try:
                     pyautogui.mouseUp(button='left', _pause=False)
                     pyautogui.mouseUp(button='right', _pause=False)
                 except Exception:
                     pass
+                with self._lock:
+                    held = list(self.held_keys)
+                    self.held_keys.clear()
+                for k in held:
+                    try:
+                        pyautogui.keyUp(k, _pause=False)
+                    except Exception:
+                        pass
+                for mod in ('shift', 'ctrl', 'alt'):
+                    try:
+                        pyautogui.keyUp(mod, _pause=False)
+                    except Exception:
+                        pass
 
                 if self.gui_overlay:
                     self.gui_overlay.set_phone_disconnected()
@@ -244,6 +354,19 @@ class AirMouseReceiver:
             pyautogui.mouseUp(button='right', _pause=False)
         except Exception:
             pass
+        with self._lock:
+            held = list(self.held_keys)
+            self.held_keys.clear()
+        for k in held:
+            try:
+                pyautogui.keyUp(k, _pause=False)
+            except Exception:
+                pass
+        for mod in ('shift', 'ctrl', 'alt'):
+            try:
+                pyautogui.keyUp(mod, _pause=False)
+            except Exception:
+                pass
 
     def on_close(self, ws, close_status_code, close_msg):
         self.cloud_status = "DISCONNECTED"
@@ -254,6 +377,19 @@ class AirMouseReceiver:
             pyautogui.mouseUp(button='right', _pause=False)
         except Exception:
             pass
+        with self._lock:
+            held = list(self.held_keys)
+            self.held_keys.clear()
+        for k in held:
+            try:
+                pyautogui.keyUp(k, _pause=False)
+            except Exception:
+                pass
+        for mod in ('shift', 'ctrl', 'alt'):
+            try:
+                pyautogui.keyUp(mod, _pause=False)
+            except Exception:
+                pass
 
         if self.gui_overlay:
             self.gui_overlay.set_cloud_status("Disconnected", "#ef4444")

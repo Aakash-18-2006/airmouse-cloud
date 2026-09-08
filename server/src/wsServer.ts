@@ -1,7 +1,15 @@
 import { WebSocketServer, WebSocket } from 'ws';
 import { IncomingMessage } from 'http';
 import { SessionManager } from './sessionManager';
-import { InboundMessage, OutboundMessage, MouseEventPayload, CommandType } from './types';
+import {
+  InboundMessage,
+  OutboundMessage,
+  MouseEventPayload,
+  KeyboardEventPayload,
+  KeyboardAction,
+  KeyboardModifier,
+  CommandType
+} from './types';
 import { config } from './config';
 
 const ALLOWED_COMMANDS: Set<string> = new Set([
@@ -17,6 +25,60 @@ const ALLOWED_COMMANDS: Set<string> = new Set([
   'scroll',
   'stop'
 ]);
+
+const ALLOWED_KEYBOARD_KEYS: Set<string> = new Set([
+  // Letters A-Z
+  ...'abcdefghijklmnopqrstuvwxyz'.split(''),
+  // Numbers 0-9
+  ...'0123456789'.split(''),
+  // Navigation and control keys
+  'space',
+  'enter',
+  'backspace',
+  'tab',
+  'esc',
+  'escape',
+  'up',
+  'down',
+  'left',
+  'right',
+  'shift',
+  'ctrl',
+  'alt',
+  'delete',
+  'home',
+  'end',
+  'pageup',
+  'pagedown'
+]);
+
+const ALLOWED_MODIFIERS: Set<string> = new Set(['ctrl', 'shift', 'alt']);
+const ALLOWED_KEYBOARD_ACTIONS: Set<string> = new Set(['key_press', 'hotkey', 'type_text', 'key_down', 'key_up']);
+
+// Per-session rate limiter for keyboard events to prevent receiver flooding (max 30 events/sec)
+class KeyboardRateLimiter {
+  private timestamps: Map<string, number[]> = new Map();
+  private readonly windowMs = 1000;
+  private readonly maxEventsPerWindow = 30;
+
+  public allow(sessionId: string): boolean {
+    const now = Date.now();
+    const history = this.timestamps.get(sessionId) || [];
+    const validHistory = history.filter((ts) => now - ts < this.windowMs);
+    if (validHistory.length >= this.maxEventsPerWindow) {
+      return false;
+    }
+    validHistory.push(now);
+    this.timestamps.set(sessionId, validHistory);
+    return true;
+  }
+
+  public cleanup(sessionId: string): void {
+    this.timestamps.delete(sessionId);
+  }
+}
+
+const keyboardRateLimiter = new KeyboardRateLimiter();
 
 export function setupWebSocketServer(wss: WebSocketServer, sessionManager: SessionManager) {
   // Heartbeat interval to detect stale/dead sockets
@@ -198,7 +260,99 @@ export function setupWebSocketServer(wss: WebSocketServer, sessionManager: Sessi
             break;
           }
 
-          // 4. Emergency Stop: can be initiated by receiver or phone
+          // 4. Keyboard event sent from paired phone to receiver
+          case 'keyboard_event': {
+            if (!msg.sessionToken) {
+              sendJson(ws, { type: 'error', message: 'Session token required for keyboard commands.' });
+              return;
+            }
+
+            const session = sessionManager.getSessionByToken(msg.sessionToken);
+            if (!session || session.status !== 'paired') {
+              sendJson(ws, { type: 'error', message: 'Invalid or inactive session.' });
+              return;
+            }
+
+            // Verify the sender is indeed the phone socket for this session
+            if (session.phoneSocket !== ws) {
+              sendJson(ws, { type: 'error', message: 'Unauthorized client socket.' });
+              return;
+            }
+
+            // Rate limit check to prevent receiver flooding
+            if (!keyboardRateLimiter.allow(session.sessionId)) {
+              sendJson(ws, { type: 'error', message: 'Keyboard rate limit exceeded.' });
+              return;
+            }
+
+            const keyPayload = msg.keyPayload;
+            if (!keyPayload || !keyPayload.action) {
+              return;
+            }
+
+            const normalizedAction = String(keyPayload.action).toLowerCase() as KeyboardAction;
+            if (!ALLOWED_KEYBOARD_ACTIONS.has(normalizedAction)) {
+              return;
+            }
+
+            const sanitizedKeyPayload: KeyboardEventPayload = {
+              action: normalizedAction,
+              seq: typeof keyPayload.seq === 'number' ? keyPayload.seq : undefined,
+              timestamp: Date.now()
+            };
+
+            if (normalizedAction === 'type_text') {
+              if (typeof keyPayload.text !== 'string' || keyPayload.text.length === 0) {
+                return;
+              }
+              // Clamp text length to 250 characters max to prevent flood/abuse
+              let safeText = keyPayload.text.slice(0, 250);
+              // Filter out ASCII control characters except \r, \n, \t
+              safeText = safeText.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '');
+              if (!safeText) {
+                return;
+              }
+              sanitizedKeyPayload.text = safeText;
+            } else {
+              // key_press, hotkey, key_down, key_up
+              if (typeof keyPayload.key !== 'string') {
+                return;
+              }
+              const keyLower = keyPayload.key.toLowerCase().trim();
+              const mappedKey = keyLower === 'escape' ? 'esc' : keyLower;
+              if (!ALLOWED_KEYBOARD_KEYS.has(mappedKey)) {
+                return;
+              }
+              sanitizedKeyPayload.key = mappedKey;
+
+              if (normalizedAction === 'hotkey' && Array.isArray(keyPayload.modifiers)) {
+                const sanitizedModifiers: KeyboardModifier[] = [];
+                for (const mod of keyPayload.modifiers) {
+                  const modLower = String(mod).toLowerCase().trim() as KeyboardModifier;
+                  if (ALLOWED_MODIFIERS.has(modLower) && !sanitizedModifiers.includes(modLower)) {
+                    sanitizedModifiers.push(modLower);
+                  }
+                }
+                sanitizedKeyPayload.modifiers = sanitizedModifiers;
+              }
+            }
+
+            // Relay directly to the laptop receiver socket
+            if (session.receiverSocket && session.receiverSocket.readyState === WebSocket.OPEN) {
+              sendJson(session.receiverSocket, {
+                type: 'keyboard_relay',
+                keyPayload: sanitizedKeyPayload
+              });
+            } else {
+              sendJson(ws, {
+                type: 'peer_disconnected',
+                message: 'Laptop receiver is disconnected.'
+              });
+            }
+            break;
+          }
+
+          // 5. Emergency Stop: can be initiated by receiver or phone
           case 'emergency_stop': {
             const session = sessionManager.getSessionBySocket(ws);
             if (session) {
@@ -227,6 +381,7 @@ export function setupWebSocketServer(wss: WebSocketServer, sessionManager: Sessi
     ws.on('close', () => {
       const { session, role } = sessionManager.removeSocket(ws);
       if (session) {
+        keyboardRateLimiter.cleanup(session.sessionId);
         if (role === 'receiver') {
           // Notify phone that laptop disconnected
           if (session.phoneSocket && session.phoneSocket.readyState === WebSocket.OPEN) {

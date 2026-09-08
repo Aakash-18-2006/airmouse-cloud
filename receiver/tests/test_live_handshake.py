@@ -76,9 +76,39 @@ def test_live_handshake():
         assert receiver_msg.get("payload", {}).get("dy") == -10
         print(f"Verified real-time command relay from Phone to Receiver successfully delivered!")
 
+        # Step 5: Test keyboard event relay
+        phone_ws.send(json.dumps({
+            "type": "keyboard_event",
+            "sessionToken": session_token,
+            "keyPayload": {
+                "action": "key_press",
+                "key": "enter"
+            }
+        }))
+
+        kb_msg = json.loads(ws.recv())
+        assert kb_msg.get("type") == "keyboard_relay", f"Expected keyboard_relay, got {kb_msg}"
+        assert kb_msg.get("keyPayload", {}).get("action") == "key_press"
+        assert kb_msg.get("keyPayload", {}).get("key") == "enter"
+        print(f"Verified real-time keyboard relay from Phone to Receiver successfully delivered!")
+
         ws.close()
         phone_ws.close()
-        print("Live End-to-End Handshake Passed Successfully!")
+        print("Live End-to-End Handshake (Mouse & Keyboard) Passed Successfully!")
+
+        # Step 6: Verify connection to live production WebSocket server
+        print("\nVerifying connection to live production WebSocket server...")
+        prod_url = "wss://airmouse-cloud-server.onrender.com/ws"
+        try:
+            prod_ws = websocket.create_connection(prod_url, timeout=10)
+            prod_ws.send(json.dumps({"type": "ping"}))
+            prod_resp = json.loads(prod_ws.recv())
+            assert prod_resp.get("type") == "pong", f"Expected pong from production server, got: {prod_resp}"
+            prod_ws.close()
+            print("Successfully verified live production WebSocket endpoint: wss://airmouse-cloud-server.onrender.com/ws")
+        except Exception as e:
+            print(f"Note: Production server connection check encountered: {e}")
+
         return True
 
     finally:
@@ -91,3 +121,4 @@ def test_live_handshake():
 if __name__ == "__main__":
     if not test_live_handshake():
         sys.exit(1)
+

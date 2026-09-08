@@ -28,3 +28,16 @@ export interface SessionInfo {
   hostname: string;
   pairingCode: string;
 }
+
+export type KeyboardAction = 'key_press' | 'hotkey' | 'type_text' | 'key_down' | 'key_up';
+export type KeyboardModifier = 'ctrl' | 'shift' | 'alt';
+
+export interface KeyboardEventPayload {
+  action: KeyboardAction;
+  key?: string;
+  modifiers?: KeyboardModifier[];
+  text?: string;
+  seq?: number;
+  timestamp?: number;
+}
+
