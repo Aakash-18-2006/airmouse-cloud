@@ -70,21 +70,32 @@ export class MouseClient {
   }
 
   private getWebSocketUrl(): string {
-    // If configured via environment variable (e.g. Vercel deployment pointing to cloud backend)
-    const envUrl = (import.meta as any).env?.VITE_WS_URL;
+    // Check if configured via Vite environment variable
+    let envUrl = (import.meta as any).env?.VITE_WS_URL;
     if (envUrl && typeof envUrl === 'string' && envUrl.trim()) {
-      return envUrl.trim();
+      envUrl = envUrl.trim();
+      // Normalize http/https prefix to ws/wss
+      if (envUrl.startsWith('https://')) {
+        envUrl = 'wss://' + envUrl.slice(8);
+      } else if (envUrl.startsWith('http://')) {
+        envUrl = 'ws://' + envUrl.slice(7);
+      }
+      return envUrl;
+    }
+
+    // In production build (e.g. deployed to Vercel/Netlify), default to live Render backend
+    if ((import.meta as any).env?.PROD) {
+      return 'wss://airmouse-cloud-server.onrender.com/ws';
     }
 
     const isHttps = window.location.protocol === 'https:';
     const proto = isHttps ? 'wss:' : 'ws:';
-    // If running in Vite dev with proxy or configured domain
     const host = window.location.host;
-    // In dev environment, backend runs on port 5000 if frontend is 5173
+    // In local dev environment, backend runs on port 5000 if frontend is 5173
     if (host.includes(':5173')) {
-      return `${proto}//${window.location.hostname}:5000`;
+      return `${proto}//${window.location.hostname}:5000/ws`;
     }
-    return `${proto}//${host}`;
+    return `${proto}//${host}/ws`;
   }
 
   public connectAndPair(code: string): Promise<{ success: boolean; hostname?: string; error?: string }> {
