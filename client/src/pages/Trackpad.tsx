@@ -211,9 +211,9 @@ export const Trackpad: React.FC<TrackpadProps> = ({ onNavigate }) => {
             gap: '8px',
             color: activeTab === 'trackpad' ? '#ffffff' : 'var(--text-secondary)',
             background: activeTab === 'trackpad'
-              ? 'linear-gradient(135deg, #0284c7 0%, #2563eb 100%)'
+              ? 'linear-gradient(135deg, #1d4ed8 0%, #2563eb 50%, #7c3aed 100%)'
               : 'transparent',
-            boxShadow: activeTab === 'trackpad' ? '0 2px 10px rgba(2, 132, 199, 0.4)' : 'none',
+            boxShadow: activeTab === 'trackpad' ? '0 2px 14px rgba(37, 99, 235, 0.5)' : 'none',
             transition: 'all 0.2s ease',
           }}
         >
@@ -239,9 +239,9 @@ export const Trackpad: React.FC<TrackpadProps> = ({ onNavigate }) => {
             gap: '8px',
             color: activeTab === 'keyboard' ? '#ffffff' : 'var(--text-secondary)',
             background: activeTab === 'keyboard'
-              ? 'linear-gradient(135deg, #0284c7 0%, #2563eb 100%)'
+              ? 'linear-gradient(135deg, #1d4ed8 0%, #2563eb 50%, #7c3aed 100%)'
               : 'transparent',
-            boxShadow: activeTab === 'keyboard' ? '0 2px 10px rgba(2, 132, 199, 0.4)' : 'none',
+            boxShadow: activeTab === 'keyboard' ? '0 2px 14px rgba(37, 99, 235, 0.5)' : 'none',
             transition: 'all 0.2s ease',
           }}
         >

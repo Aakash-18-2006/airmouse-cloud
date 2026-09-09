@@ -1,5 +1,5 @@
 {
-  "cloudWsUrl": "ws://localhost:5000",
+  "cloudWsUrl": "wss://airmouse-cloud-server.onrender.com/ws",
   "reconnectDelaySeconds": 3,
   "maxReconnectAttempts": 50,
   "maxDelta": 300,

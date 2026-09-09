@@ -1,22 +1,37 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { mouseClient } from '../services/mouseClient';
-import { ArrowLeft, KeyRound, Loader2, CheckCircle2, AlertCircle } from 'lucide-react';
+import { X, KeyRound, Loader2, CheckCircle2, AlertCircle, Laptop } from 'lucide-react';
 
-interface ConnectProps {
-  onNavigate: (page: string) => void;
+interface ConnectModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  onSuccess: () => void;
+  onNavigateToDownload: () => void;
 }
 
-export const Connect: React.FC<ConnectProps> = ({ onNavigate }) => {
+export const ConnectModal: React.FC<ConnectModalProps> = ({
+  isOpen,
+  onClose,
+  onSuccess,
+  onNavigateToDownload,
+}) => {
   const [digits, setDigits] = useState<string[]>(['', '', '', '', '', '']);
   const [statusState, setStatusState] = useState<'idle' | 'connecting' | 'connected' | 'error'>('idle');
   const [statusMessage, setStatusMessage] = useState<string>('');
-
   const inputRefs = useRef<(HTMLInputElement | null)[]>([]);
 
   useEffect(() => {
-    // Focus the first digit input on mount
-    inputRefs.current[0]?.focus();
-  }, []);
+    if (isOpen) {
+      setDigits(['', '', '', '', '', '']);
+      setStatusState('idle');
+      setStatusMessage('');
+      setTimeout(() => {
+        inputRefs.current[0]?.focus();
+      }, 50);
+    }
+  }, [isOpen]);
+
+  if (!isOpen) return null;
 
   const handleDigitChange = (index: number, val: string) => {
     const cleaned = val.replace(/\D/g, '').slice(-1);
@@ -50,8 +65,8 @@ export const Connect: React.FC<ConnectProps> = ({ onNavigate }) => {
     }
     setDigits(newDigits);
 
-    const focusIdx = Math.min(pasted.length, 5);
-    inputRefs.current[focusIdx]?.focus();
+    const nextIdx = Math.min(pasted.length, 5);
+    inputRefs.current[nextIdx]?.focus();
   };
 
   const handleSubmit = async (e?: React.FormEvent) => {
@@ -72,7 +87,7 @@ export const Connect: React.FC<ConnectProps> = ({ onNavigate }) => {
         setStatusState('connected');
         setStatusMessage('Connected to Windows PC');
         setTimeout(() => {
-          onNavigate('mouse');
+          onSuccess();
         }, 650);
       } else {
         setStatusState('error');
@@ -87,74 +102,76 @@ export const Connect: React.FC<ConnectProps> = ({ onNavigate }) => {
       }
     } catch (err: any) {
       setStatusState('error');
-      setStatusMessage('Connection Lost. Please check your network and try again.');
+      setStatusMessage('Connection Lost. Please try again.');
     }
   };
 
   return (
-    <div
-      style={{
-        maxWidth: '480px',
-        margin: '20px auto',
-        padding: '24px 20px',
-        width: '100%',
-        display: 'flex',
-        flexDirection: 'column',
-        gap: '20px',
-      }}
-    >
-      <button
-        onClick={() => onNavigate('landing')}
-        style={{
-          display: 'inline-flex',
-          alignItems: 'center',
-          gap: '8px',
-          background: 'none',
-          border: 'none',
-          color: 'var(--text-secondary)',
-          cursor: 'pointer',
-          fontSize: '0.95rem',
-          padding: '4px 0',
-          alignSelf: 'flex-start',
-        }}
-      >
-        <ArrowLeft size={18} />
-        <span>Back to Home</span>
-      </button>
-
+    <div className="modal-overlay" onClick={onClose}>
       <div
         className="glass-card-glow"
+        onClick={(e) => e.stopPropagation()}
         style={{
-          padding: '40px 28px',
-          textAlign: 'center',
-          backgroundColor: 'rgba(11, 16, 36, 0.85)',
+          width: '100%',
+          maxWidth: '480px',
+          padding: '36px 28px',
           borderRadius: '24px',
+          backgroundColor: 'rgba(11, 16, 36, 0.88)',
+          boxShadow: '0 20px 60px rgba(0, 0, 0, 0.8), 0 0 30px rgba(56, 189, 248, 0.2)',
+          position: 'relative',
         }}
       >
-        <div
+        {/* Close button */}
+        <button
+          onClick={onClose}
           style={{
-            width: '56px',
-            height: '56px',
-            borderRadius: '16px',
-            background: 'linear-gradient(135deg, rgba(56, 189, 248, 0.2) 0%, rgba(99, 102, 241, 0.2) 100%)',
-            border: '1px solid rgba(56, 189, 248, 0.4)',
+            position: 'absolute',
+            top: '20px',
+            right: '20px',
+            background: 'rgba(255, 255, 255, 0.06)',
+            border: '1px solid rgba(255, 255, 255, 0.1)',
+            borderRadius: '50%',
+            width: '34px',
+            height: '34px',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            color: 'var(--accent-cyan)',
-            margin: '0 auto 18px auto',
-            boxShadow: '0 0 20px rgba(56, 189, 248, 0.25)',
+            color: 'var(--text-secondary)',
+            cursor: 'pointer',
+            transition: 'all 0.2s ease',
           }}
+          aria-label="Close modal"
         >
-          <KeyRound size={28} />
-        </div>
+          <X size={18} />
+        </button>
 
-        <h1 style={{ fontSize: '1.8rem', fontWeight: 700, color: '#ffffff', marginBottom: '8px' }}>
-          Connect to your laptop
-        </h1>
-        <p style={{ color: 'var(--text-secondary)', fontSize: '0.95rem', marginBottom: '28px', lineHeight: 1.5 }}>
-          Enter the 6-digit pairing code shown on your AirMouse Receiver.
-        </p>
+        {/* Modal Header */}
+        <div style={{ textAlign: 'center', marginBottom: '24px' }}>
+          <div
+            style={{
+              width: '54px',
+              height: '54px',
+              borderRadius: '16px',
+              background: 'linear-gradient(135deg, rgba(56, 189, 248, 0.2) 0%, rgba(99, 102, 241, 0.2) 100%)',
+              border: '1px solid rgba(56, 189, 248, 0.4)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              color: 'var(--accent-cyan)',
+              margin: '0 auto 16px auto',
+              boxShadow: '0 0 20px rgba(56, 189, 248, 0.2)',
+            }}
+          >
+            <KeyRound size={26} />
+          </div>
+
+          <h2 style={{ fontSize: '1.65rem', fontWeight: 700, letterSpacing: '-0.02em', color: '#ffffff' }}>
+            Connect to your laptop
+          </h2>
+          <p style={{ color: 'var(--text-secondary)', fontSize: '0.92rem', marginTop: '6px' }}>
+            Enter the 6-digit pairing code shown on your AirMouse Receiver.
+          </p>
+        </div>
 
         {/* 6 Digit Input Group */}
         <form onSubmit={handleSubmit}>
@@ -163,7 +180,7 @@ export const Connect: React.FC<ConnectProps> = ({ onNavigate }) => {
               display: 'flex',
               gap: '8px',
               justifyContent: 'center',
-              marginBottom: '24px',
+              marginBottom: '20px',
             }}
           >
             {digits.map((digit, idx) => (
@@ -199,7 +216,7 @@ export const Connect: React.FC<ConnectProps> = ({ onNavigate }) => {
             ))}
           </div>
 
-          {/* Feedback states */}
+          {/* Status Feedback Message */}
           {statusState === 'connecting' && (
             <div
               className="fade-in"
@@ -209,8 +226,8 @@ export const Connect: React.FC<ConnectProps> = ({ onNavigate }) => {
                 justifyContent: 'center',
                 gap: '8px',
                 color: 'var(--status-yellow)',
-                fontSize: '0.92rem',
-                marginBottom: '20px',
+                fontSize: '0.9rem',
+                marginBottom: '18px',
               }}
             >
               <Loader2 size={18} className="status-dot connecting" />
@@ -233,7 +250,7 @@ export const Connect: React.FC<ConnectProps> = ({ onNavigate }) => {
                 padding: '10px',
                 fontSize: '0.92rem',
                 fontWeight: 600,
-                marginBottom: '20px',
+                marginBottom: '18px',
               }}
             >
               <CheckCircle2 size={18} />
@@ -247,15 +264,15 @@ export const Connect: React.FC<ConnectProps> = ({ onNavigate }) => {
               style={{
                 display: 'flex',
                 alignItems: 'center',
+                justifyContent: 'center',
                 gap: '8px',
+                color: '#fca5a5',
                 backgroundColor: 'rgba(239, 68, 68, 0.12)',
                 border: '1px solid rgba(239, 68, 68, 0.35)',
                 borderRadius: '10px',
-                padding: '12px 16px',
-                color: '#fca5a5',
+                padding: '10px',
                 fontSize: '0.9rem',
-                marginBottom: '20px',
-                textAlign: 'left',
+                marginBottom: '18px',
               }}
             >
               <AlertCircle size={18} style={{ flexShrink: 0 }} />
@@ -263,14 +280,16 @@ export const Connect: React.FC<ConnectProps> = ({ onNavigate }) => {
             </div>
           )}
 
+          {/* Connect Submit Button */}
           <button
             type="submit"
             className="btn-primary"
             disabled={statusState === 'connecting' || statusState === 'connected'}
             style={{
               width: '100%',
-              padding: '16px',
+              padding: '15px',
               fontSize: '1.05rem',
+              letterSpacing: '0.02em',
               opacity: statusState === 'connecting' ? 0.75 : 1,
             }}
           >
@@ -290,17 +309,22 @@ export const Connect: React.FC<ConnectProps> = ({ onNavigate }) => {
           </button>
         </form>
 
+        {/* Footer Link to Download Receiver */}
         <div
           style={{
-            marginTop: '26px',
-            paddingTop: '20px',
+            marginTop: '22px',
+            paddingTop: '18px',
             borderTop: '1px solid rgba(255, 255, 255, 0.08)',
+            textAlign: 'center',
           }}
         >
-          <p style={{ fontSize: '0.88rem', color: 'var(--text-muted)' }}>
+          <p style={{ fontSize: '0.86rem', color: 'var(--text-muted)' }}>
             Need the receiver for your laptop?{' '}
             <button
-              onClick={() => onNavigate('download')}
+              onClick={() => {
+                onClose();
+                onNavigateToDownload();
+              }}
               style={{
                 background: 'none',
                 border: 'none',
