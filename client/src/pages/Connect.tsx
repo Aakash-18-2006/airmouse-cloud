@@ -14,8 +14,37 @@ export const Connect: React.FC<ConnectProps> = ({ onNavigate }) => {
   const inputRefs = useRef<(HTMLInputElement | null)[]>([]);
 
   useEffect(() => {
-    // Focus the first digit input on mount
-    inputRefs.current[0]?.focus();
+    // Check if code query param is present
+    const params = new URLSearchParams(window.location.search);
+    const codeParam = params.get('code');
+    if (codeParam && /^\d{6}$/.test(codeParam.trim())) {
+      const codeDigits = codeParam.trim().split('');
+      setDigits(codeDigits);
+      const connectWithCode = async (c: string) => {
+        setStatusState('connecting');
+        setStatusMessage('Connecting...');
+        try {
+          const result = await mouseClient.connectAndPair(c);
+          if (result.success) {
+            setStatusState('connected');
+            setStatusMessage('Connected to Windows PC');
+            setTimeout(() => {
+              onNavigate('mouse');
+            }, 650);
+          } else {
+            setStatusState('error');
+            setStatusMessage(result.error || 'Invalid Code');
+          }
+        } catch (err: any) {
+          setStatusState('error');
+          setStatusMessage('Connection error.');
+        }
+      };
+      connectWithCode(codeParam.trim());
+    } else {
+      // Focus the first digit input on mount
+      inputRefs.current[0]?.focus();
+    }
   }, []);
 
   const handleDigitChange = (index: number, val: string) => {

@@ -9,6 +9,10 @@ import { Download, Wifi, Shield, Zap } from 'lucide-react';
 
 export const App: React.FC = () => {
   const [currentPage, setCurrentPage] = useState<string>(() => {
+    const searchParams = new URLSearchParams(window.location.search);
+    if (searchParams.get('code')) {
+      return 'connect';
+    }
     const path = window.location.pathname.replace(/^\//, '');
     if (path === 'connect' || path === 'mouse' || path === 'download') {
       return path;

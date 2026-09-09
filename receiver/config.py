@@ -128,3 +128,12 @@ PYAUTOGUI_FAILSAFE = False
 # Mouse movement clamping limits
 MAX_DELTA = int(_loaded_json.get("maxDelta", 300))
 MAX_SCROLL = int(_loaded_json.get("maxScroll", 100))
+
+# Deployed AirMouse Web Application URL
+DEFAULT_WEBSITE_URL = (
+    os.environ.get("AIRMOUSE_WEB_URL")
+    or os.environ.get("AIRMOUSE_SITE_URL")
+    or _loaded_env.get("AIRMOUSE_WEB_URL")
+    or _loaded_json.get("websiteUrl")
+    or "https://airmouse-cloud.vercel.app"
+)

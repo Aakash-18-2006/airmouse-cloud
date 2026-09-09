@@ -1,5 +1,6 @@
 {
   "cloudWsUrl": "wss://airmouse-cloud-server.onrender.com/ws",
+  "websiteUrl": "https://airmouse-cloud.vercel.app",
   "reconnectDelaySeconds": 3,
   "maxReconnectAttempts": 50,
   "maxDelta": 300,

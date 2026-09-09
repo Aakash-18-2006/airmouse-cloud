@@ -242,5 +242,22 @@ class TestAirMouseReceiverProtocol(unittest.TestCase):
         self.receiver.on_message(None, msg)
         mock_hotkey.assert_called_once_with("alt", "f4")
 
+    @patch('receiver.find_airmouse_windows', return_value=[])
+    @patch('webbrowser.open')
+    def test_hotkey_opens_website_when_not_open(self, mock_web_open, mock_find_win):
+        """When website is not open, Ctrl+A+H launches the website."""
+        self.receiver.pairing_code = "987654"
+        self.receiver.launch_or_focus_airmouse()
+        mock_web_open.assert_called_once_with(f"{self.receiver.website_url}/connect?code=987654")
+
+    @patch('receiver.find_airmouse_windows', return_value=[(12345, "AirMouse Cloud - Google Chrome")])
+    @patch('receiver.bring_window_to_foreground')
+    @patch('webbrowser.open')
+    def test_hotkey_focuses_existing_window_when_already_open(self, mock_web_open, mock_bring_fg, mock_find_win):
+        """When website is already open, Ctrl+A+H brings it to foreground without opening duplicate."""
+        self.receiver.launch_or_focus_airmouse()
+        mock_bring_fg.assert_called_once_with(12345)
+        mock_web_open.assert_not_called()
+
 if __name__ == '__main__':
     unittest.main()

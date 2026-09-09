@@ -21,10 +21,15 @@ if hasattr(sys.stdout, 'reconfigure'):
     except Exception:
         pass
 
+import webbrowser
+import ctypes
+from ctypes import wintypes
+
 # Local imports
 try:
     from config import (
         DEFAULT_SERVER_URL,
+        DEFAULT_WEBSITE_URL,
         RECONNECT_DELAY_SECONDS,
         MAX_RECONNECT_ATTEMPTS,
         PYAUTOGUI_PAUSE,
@@ -36,6 +41,7 @@ try:
 except ImportError:
     from .config import (
         DEFAULT_SERVER_URL,
+        DEFAULT_WEBSITE_URL,
         RECONNECT_DELAY_SECONDS,
         MAX_RECONNECT_ATTEMPTS,
         PYAUTOGUI_PAUSE,
@@ -65,9 +71,137 @@ ALLOWED_RECEIVER_KEYS = {
 
 ALLOWED_RECEIVER_MODIFIERS = {'ctrl', 'shift', 'alt'}
 
+def find_airmouse_windows():
+    """
+    Finds open top-level Windows whose title contains 'AirMouse' or 'Air Mouse' or 'airmouse-cloud'.
+    Excludes the receiver's own console or floating GUI window.
+    Returns list of tuples: (hwnd, title)
+    """
+    if os.name != 'nt':
+        return []
+
+    user32 = ctypes.windll.user32
+    matches = []
+    current_pid = os.getpid()
+
+    WNDENUMPROC = ctypes.WINFUNCTYPE(wintypes.BOOL, wintypes.HWND, wintypes.LPARAM)
+
+    def enum_cb(hwnd, lparam):
+        try:
+            if not user32.IsWindow(hwnd) or not user32.IsWindowVisible(hwnd):
+                return True
+
+            # Exclude the receiver process itself
+            lpdw_process_id = wintypes.DWORD()
+            user32.GetWindowThreadProcessId(hwnd, ctypes.byref(lpdw_process_id))
+            if lpdw_process_id.value == current_pid:
+                return True
+
+            length = user32.GetWindowTextLengthW(hwnd)
+            if length > 0:
+                buff = ctypes.create_unicode_buffer(length + 1)
+                user32.GetWindowTextW(hwnd, buff, length + 1)
+                title = buff.value
+                t_lower = title.lower()
+                # Match AirMouse website windows and ignore receiver window
+                if ("airmouse" in t_lower or "air mouse" in t_lower) and "receiver" not in t_lower:
+                    matches.append((hwnd, title))
+        except Exception:
+            pass
+        return True
+
+    user32.EnumWindows(WNDENUMPROC(enum_cb), 0)
+    return matches
+
+def bring_window_to_foreground(hwnd):
+    """
+    Restores (if minimized) and brings the specified window to the foreground.
+    Uses Win32 AttachThreadInput to reliably switch focus from background.
+    """
+    if os.name != 'nt' or not hwnd:
+        return
+
+    user32 = ctypes.windll.user32
+    kernel32 = ctypes.windll.kernel32
+
+    try:
+        # If minimized, restore it: SW_RESTORE = 9, SW_SHOW = 5
+        SW_RESTORE = 9
+        SW_SHOW = 5
+        if user32.IsIconic(hwnd):
+            user32.ShowWindow(hwnd, SW_RESTORE)
+        else:
+            user32.ShowWindow(hwnd, SW_SHOW)
+
+        # Attach thread input of foreground window to current thread to bypass Windows focus lock
+        cur_thread = kernel32.GetCurrentThreadId()
+        fg_hwnd = user32.GetForegroundWindow()
+        fg_thread = user32.GetWindowThreadProcessId(fg_hwnd, None) if fg_hwnd else 0
+
+        if fg_thread != 0 and fg_thread != cur_thread:
+            user32.AttachThreadInput(cur_thread, fg_thread, True)
+
+        user32.SetForegroundWindow(hwnd)
+        user32.BringWindowToTop(hwnd)
+        user32.SetFocus(hwnd)
+
+        if fg_thread != 0 and fg_thread != cur_thread:
+            user32.AttachThreadInput(cur_thread, fg_thread, False)
+    except Exception:
+        # Fallback to PyGetWindow if available
+        try:
+            import pygetwindow as gw
+            for w in gw.getAllWindows():
+                if ("airmouse" in w.title.lower() or "air mouse" in w.title.lower()) and "receiver" not in w.title.lower():
+                    if w.isMinimized:
+                        w.restore()
+                    w.activate()
+                    break
+        except Exception:
+            pass
+
+def manage_windows_startup(install: bool) -> bool:
+    """Configures AirMouse Receiver to run automatically on Windows startup."""
+    if os.name != 'nt':
+        print("Windows startup management is only supported on Windows.")
+        return False
+
+    import winreg
+    key_path = r"Software\Microsoft\Windows\CurrentVersion\Run"
+    app_name = "AirMouseReceiver"
+
+    try:
+        key = winreg.OpenKey(winreg.HKEY_CURRENT_USER, key_path, 0, winreg.KEY_SET_VALUE)
+        if install:
+            if getattr(sys, 'frozen', False):
+                cmd = f'"{sys.executable}"'
+            else:
+                py_exe = sys.executable.replace("python.exe", "pythonw.exe")
+                if not os.path.exists(py_exe):
+                    py_exe = sys.executable
+                script_path = os.path.abspath(__file__)
+                cmd = f'"{py_exe}" "{script_path}"'
+
+            winreg.SetValueEx(key, app_name, 0, winreg.REG_SZ, cmd)
+            winreg.CloseKey(key)
+            print(f"✓ AirMouse Receiver successfully added to Windows Startup:\n  {cmd}")
+            return True
+        else:
+            try:
+                winreg.DeleteValue(key, app_name)
+                print("✓ AirMouse Receiver removed from Windows Startup.")
+            except FileNotFoundError:
+                print("AirMouse Receiver was not found in Windows Startup.")
+            winreg.CloseKey(key)
+            return True
+    except Exception as e:
+        print(f"❌ Failed to update Windows Startup registry: {e}")
+        return False
+
 class AirMouseReceiver:
-    def __init__(self, server_url=DEFAULT_SERVER_URL, enable_gui=True):
+    def __init__(self, server_url=DEFAULT_SERVER_URL, website_url=DEFAULT_WEBSITE_URL, enable_gui=True):
         self.server_url = server_url.strip() if server_url else ""
+        self.website_url = website_url.strip() if website_url else DEFAULT_WEBSITE_URL
         self.enable_gui = enable_gui
         self.hostname = socket.gethostname()
         self.ws = None
@@ -81,6 +215,7 @@ class AirMouseReceiver:
         self.held_keys = set()
         self._lock = threading.Lock()
         self._stopped_by_user = False
+        self._last_hotkey_trigger = 0.0
 
     def generate_secure_pin(self) -> str:
         """Generates a cryptographically random 6-digit PIN."""
@@ -109,8 +244,90 @@ class AirMouseReceiver:
             print("\nSession:      Active & Linked")
             print("Action:       Controlling Real Windows Cursor [PyAutoGUI]")
         print("----------------------------------------")
+        print("Shortcut: Press Ctrl+A+H to open/focus website")
         print("Controls: Type 'stop' or press Ctrl+C for Emergency Stop")
         print("========================================")
+
+    def launch_or_focus_airmouse(self):
+        """
+        Triggered when Ctrl + A + H is pressed.
+        1. Checks if Air Mouse website is already open.
+        2. If open: restores and brings existing window to the foreground without opening duplicate tabs.
+        3. If not open: opens the deployed Air Mouse website in the default browser.
+        """
+        now = time.time()
+        with self._lock:
+            if now - self._last_hotkey_trigger < 1.0:
+                return
+            self._last_hotkey_trigger = now
+
+        print("\n[HOTKEY] Ctrl+A+H detected")
+        try:
+            windows = find_airmouse_windows()
+            if windows:
+                hwnd, title = windows[0]
+                print(f"[HOTKEY] Air Mouse website already open - focusing window")
+                bring_window_to_foreground(hwnd)
+            else:
+                print("[HOTKEY] Opening Air Mouse website")
+                target_url = self.website_url
+                if self.pairing_code and self.pairing_code != "------":
+                    target_url = f"{self.website_url}/connect?code={self.pairing_code}"
+                webbrowser.open(target_url)
+        except Exception as e:
+            print(f"[HOTKEY] Error launching or focusing website: {e}")
+            try:
+                webbrowser.open(self.website_url)
+            except Exception:
+                pass
+
+    def start_global_hotkey_listener(self):
+        """
+        Registers the global Windows shortcut: Ctrl + A + H.
+        Specifically requires Ctrl key + letter 'A' + letter 'H' (NOT Alt).
+        Uses keyboard library with ctypes GetAsyncKeyState polling fallback.
+        Does not block normal keyboard input.
+        """
+        # 1. Register with keyboard library if available
+        try:
+            import keyboard
+            keyboard.add_hotkey('ctrl+a+h', self.launch_or_focus_airmouse, suppress=False)
+        except Exception:
+            pass
+
+        # 2. Start background thread polling GetAsyncKeyState as universal fallback
+        if os.name == 'nt':
+            def _poll_keys():
+                user32 = ctypes.windll.user32
+                VK_CONTROL = 0x11
+                VK_A = 0x41
+                VK_H = 0x48
+                VK_MENU = 0x12  # Alt key
+
+                is_active = False
+
+                while self.is_running:
+                    try:
+                        ctrl_down = bool(user32.GetAsyncKeyState(VK_CONTROL) & 0x8000)
+                        a_down = bool(user32.GetAsyncKeyState(VK_A) & 0x8000)
+                        h_down = bool(user32.GetAsyncKeyState(VK_H) & 0x8000)
+                        alt_down = bool(user32.GetAsyncKeyState(VK_MENU) & 0x8000)
+
+                        # Must specifically be Ctrl + A + H, and NOT Alt
+                        combo_down = ctrl_down and a_down and h_down and not alt_down
+
+                        if combo_down and not is_active:
+                            is_active = True
+                            threading.Thread(target=self.launch_or_focus_airmouse, daemon=True).start()
+                        elif not combo_down and is_active:
+                            is_active = False
+                    except Exception:
+                        pass
+
+                    time.sleep(0.04)
+
+            t = threading.Thread(target=_poll_keys, daemon=True)
+            t.start()
 
     def emergency_stop(self):
         """
@@ -497,6 +714,9 @@ class AirMouseReceiver:
 
         self.is_running = True
 
+        # Start global Ctrl + A + H shortcut listener
+        self.start_global_hotkey_listener()
+
         # Start GUI overlay if requested
         if self.enable_gui:
             try:
@@ -538,9 +758,19 @@ class AirMouseReceiver:
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="AirMouse Cloud - Windows Receiver")
     parser.add_argument("--server", default=DEFAULT_SERVER_URL, help=f"WebSocket Server URL (default: {DEFAULT_SERVER_URL})")
+    parser.add_argument("--website", default=DEFAULT_WEBSITE_URL, help=f"AirMouse Web App URL (default: {DEFAULT_WEBSITE_URL})")
     parser.add_argument("--no-gui", action="store_true", help="Disable Tkinter emergency floating overlay")
+    parser.add_argument("--install-startup", action="store_true", help="Configure AirMouse Receiver to automatically launch on Windows startup")
+    parser.add_argument("--uninstall-startup", action="store_true", help="Remove AirMouse Receiver from Windows startup")
 
     args = parser.parse_args()
 
-    receiver = AirMouseReceiver(server_url=args.server, enable_gui=not args.no_gui)
+    if args.install_startup:
+        manage_windows_startup(install=True)
+        sys.exit(0)
+    elif args.uninstall_startup:
+        manage_windows_startup(install=False)
+        sys.exit(0)
+
+    receiver = AirMouseReceiver(server_url=args.server, website_url=args.website, enable_gui=not args.no_gui)
     receiver.start()
