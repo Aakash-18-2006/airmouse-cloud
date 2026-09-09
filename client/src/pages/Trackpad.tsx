@@ -4,7 +4,7 @@ import { TouchSurface } from '../components/TouchSurface';
 import { KeyboardSurface } from '../components/KeyboardSurface';
 import { SensitivityModal } from '../components/SensitivityModal';
 import { ConnectionStatus } from '../types/protocol';
-import { Sliders, Power, AlertCircle, RefreshCw, MousePointer, Keyboard } from 'lucide-react';
+import { Sliders, Power, AlertCircle, RefreshCw, MousePointer, Keyboard, XSquare } from 'lucide-react';
 
 interface TrackpadProps {
   onNavigate: (page: string) => void;
@@ -21,6 +21,7 @@ export const Trackpad: React.FC<TrackpadProps> = ({ onNavigate }) => {
   const [isSensitivityOpen, setIsSensitivityOpen] = useState<boolean>(false);
   const [sessionDuration, setSessionDuration] = useState<number>(0);
   const [disconnectReason, setDisconnectReason] = useState<string | null>(null);
+  const [altF4Feedback, setAltF4Feedback] = useState<boolean>(false);
 
   const durationTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -99,6 +100,13 @@ export const Trackpad: React.FC<TrackpadProps> = ({ onNavigate }) => {
     }
   };
 
+  const handleAltF4 = () => {
+    triggerHaptic(35);
+    setAltF4Feedback(true);
+    setTimeout(() => setAltF4Feedback(false), 300);
+    mouseClient.sendAltF4();
+  };
+
   return (
     <div
       style={{
@@ -150,7 +158,31 @@ export const Trackpad: React.FC<TrackpadProps> = ({ onNavigate }) => {
           </span>
         </div>
 
-        <div style={{ display: 'flex', gap: '8px' }}>
+        <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+          <button
+            onClick={handleAltF4}
+            title="Close Active Window (Alt + F4)"
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+              backgroundColor: altF4Feedback ? 'rgba(239, 68, 68, 0.45)' : 'rgba(239, 68, 68, 0.14)',
+              border: '1px solid rgba(239, 68, 68, 0.45)',
+              color: '#fca5a5',
+              borderRadius: 'var(--radius-full)',
+              padding: '6px 12px',
+              fontSize: '0.8rem',
+              fontWeight: 700,
+              cursor: 'pointer',
+              boxShadow: altF4Feedback ? '0 0 16px rgba(239, 68, 68, 0.65)' : 'none',
+              transform: altF4Feedback ? 'scale(0.94)' : 'scale(1)',
+              transition: 'all 0.15s ease',
+            }}
+          >
+            <XSquare size={14} color="#f87171" />
+            <span>Alt + F4</span>
+          </button>
+
           <button
             onClick={() => setIsSensitivityOpen(true)}
             style={{

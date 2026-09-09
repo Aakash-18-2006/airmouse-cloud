@@ -266,6 +266,14 @@ export class MouseClient {
     });
   }
 
+  public sendAltF4(): void {
+    console.log('[AirMouse Client] Sending ALT_F4 command to receiver...');
+    // Send as dedicated command type
+    this.sendCommand({ type: 'alt_f4' });
+    // Also send as hotkey for redundancy
+    this.sendHotkey('f4', ['alt']);
+  }
+
   public sendTypeText(text: string): void {
     if (!text) return;
     this.sendKeyboardCommand({

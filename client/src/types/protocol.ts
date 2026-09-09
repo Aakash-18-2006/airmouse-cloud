@@ -11,6 +11,7 @@ export type CommandType =
   | 'drag_move'
   | 'drag_end'
   | 'scroll'
+  | 'alt_f4'
   | 'stop';
 
 export interface MouseEventPayload {

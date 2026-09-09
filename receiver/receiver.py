@@ -54,6 +54,8 @@ ALLOWED_RECEIVER_KEYS = {
     *(chr(c) for c in range(ord('a'), ord('z') + 1)),
     # Numbers 0-9
     *(str(i) for i in range(10)),
+    # Function keys F1-F12
+    *(f'f{i}' for i in range(1, 13)),
     # Navigation & control keys
     'space', 'enter', 'backspace', 'tab', 'esc', 'escape',
     'up', 'down', 'left', 'right',
@@ -212,6 +214,15 @@ class AirMouseReceiver:
             elif cmd_type in ("stop", "emergency_stop"):
                 self.emergency_stop()
 
+            # 9. Alt + F4 Window Close Shortcut
+            elif cmd_type in ("alt_f4", "alt+f4", "alt_f4_press"):
+                print("⚡ [ALT_F4] Received Alt+F4 command from Air Mouse")
+                try:
+                    pyautogui.hotkey("alt", "f4")
+                    print("✓ [ALT_F4] Executed pyautogui.hotkey('alt', 'f4') successfully.")
+                except Exception as e:
+                    print(f"❌ [ALT_F4] Error executing Alt+F4 shortcut: {e}")
+
         except Exception:
             # Prevent receiver from crashing on any unexpected input hiccup
             pass
@@ -230,7 +241,15 @@ class AirMouseReceiver:
             return
 
         try:
-            if action == "key_press":
+            if action in ("alt_f4", "alt+f4"):
+                print("⚡ [ALT_F4] Received Alt+F4 action from Air Mouse")
+                try:
+                    pyautogui.hotkey("alt", "f4")
+                    print("✓ [ALT_F4] Executed pyautogui.hotkey('alt', 'f4') successfully.")
+                except Exception as e:
+                    print(f"❌ [ALT_F4] Error executing Alt+F4 shortcut: {e}")
+
+            elif action == "key_press":
                 raw_key = str(payload.get("key", "")).lower().strip()
                 key = "esc" if raw_key == "escape" else raw_key
                 if key in ALLOWED_RECEIVER_KEYS:
@@ -241,7 +260,14 @@ class AirMouseReceiver:
                 key = "esc" if raw_key == "escape" else raw_key
                 raw_mods = payload.get("modifiers", [])
                 mods = [str(m).lower().strip() for m in raw_mods if str(m).lower().strip() in ALLOWED_RECEIVER_MODIFIERS]
-                if key in ALLOWED_RECEIVER_KEYS and mods:
+                if (key == "f4" and "alt" in mods) or raw_key in ("alt_f4", "alt+f4"):
+                    print("⚡ [ALT_F4] Received Alt+F4 hotkey command from Air Mouse")
+                    try:
+                        pyautogui.hotkey("alt", "f4")
+                        print("✓ [ALT_F4] Executed pyautogui.hotkey('alt', 'f4') successfully.")
+                    except Exception as e:
+                        print(f"❌ [ALT_F4] Error executing Alt+F4 shortcut: {e}")
+                elif key in ALLOWED_RECEIVER_KEYS and mods:
                     pyautogui.hotkey(*mods, key, _pause=False)
                 elif key in ALLOWED_RECEIVER_KEYS:
                     pyautogui.press(key, _pause=False)
@@ -343,6 +369,14 @@ class AirMouseReceiver:
 
             elif msg_type == "emergency_stopped":
                 self.emergency_stop()
+
+            elif msg_type in ("alt_f4", "ALT_F4") or data.get("command") == "ALT_F4":
+                print("⚡ [ALT_F4] Received direct ALT_F4 message from Air Mouse")
+                try:
+                    pyautogui.hotkey("alt", "f4")
+                    print("✓ [ALT_F4] Executed pyautogui.hotkey('alt', 'f4') successfully.")
+                except Exception as e:
+                    print(f"❌ [ALT_F4] Error executing Alt+F4 shortcut: {e}")
 
         except Exception:
             pass

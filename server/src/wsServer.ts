@@ -23,6 +23,7 @@ const ALLOWED_COMMANDS: Set<string> = new Set([
   'drag_move',
   'drag_end',
   'scroll',
+  'alt_f4',
   'stop'
 ]);
 
@@ -31,6 +32,11 @@ const ALLOWED_KEYBOARD_KEYS: Set<string> = new Set([
   ...'abcdefghijklmnopqrstuvwxyz'.split(''),
   // Numbers 0-9
   ...'0123456789'.split(''),
+  // Function keys F1-F12
+  ...'123456789'.split('').map((n) => `f${n}`),
+  'f10',
+  'f11',
+  'f12',
   // Navigation and control keys
   'space',
   'enter',

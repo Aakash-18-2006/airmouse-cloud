@@ -221,5 +221,26 @@ class TestAirMouseReceiverProtocol(unittest.TestCase):
         self.receiver.on_message(None, msg)
         mock_press.assert_called_once_with("enter", _pause=False)
 
+    @patch('pyautogui.hotkey')
+    def test_alt_f4_command(self, mock_hotkey):
+        """Test alt_f4 command via handle_command."""
+        payload = {"type": "alt_f4"}
+        self.receiver.handle_command(payload)
+        mock_hotkey.assert_called_once_with("alt", "f4")
+
+    @patch('pyautogui.hotkey')
+    def test_alt_f4_keyboard_hotkey(self, mock_hotkey):
+        """Test alt_f4 via keyboard hotkey."""
+        payload = {"action": "hotkey", "key": "f4", "modifiers": ["alt"]}
+        self.receiver.handle_keyboard_command(payload)
+        mock_hotkey.assert_called_once_with("alt", "f4")
+
+    @patch('pyautogui.hotkey')
+    def test_alt_f4_direct_message(self, mock_hotkey):
+        """Test alt_f4 via direct websocket message."""
+        msg = '{"type": "alt_f4"}'
+        self.receiver.on_message(None, msg)
+        mock_hotkey.assert_called_once_with("alt", "f4")
+
 if __name__ == '__main__':
     unittest.main()

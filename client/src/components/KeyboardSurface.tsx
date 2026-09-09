@@ -380,7 +380,7 @@ export const KeyboardSurface: React.FC = () => {
         <div
           style={{
             display: 'grid',
-            gridTemplateColumns: 'repeat(5, 1fr)',
+            gridTemplateColumns: 'repeat(6, 1fr)',
             gap: '6px',
           }}
         >
@@ -390,22 +390,28 @@ export const KeyboardSurface: React.FC = () => {
             { label: 'Undo', mod: 'ctrl' as KeyboardModifier, key: 'z' },
             { label: 'All', mod: 'ctrl' as KeyboardModifier, key: 'a' },
             { label: 'Tab⇥', mod: 'alt' as KeyboardModifier, key: 'tab' },
+            { label: 'Alt+F4', isAltF4: true },
           ].map((item) => (
             <button
               key={item.label}
               onClick={() => {
-                triggerHaptic(20);
-                showFeedback(`${item.mod.toUpperCase()}+${item.key.toUpperCase()}`);
-                mouseClient.sendHotkey(item.key, [item.mod]);
+                triggerHaptic(25);
+                if (item.isAltF4) {
+                  showFeedback('ALT+F4');
+                  mouseClient.sendAltF4();
+                } else if (item.mod && item.key) {
+                  showFeedback(`${item.mod.toUpperCase()}+${item.key.toUpperCase()}`);
+                  mouseClient.sendHotkey(item.key, [item.mod]);
+                }
               }}
               className="glass-panel"
               style={{
                 padding: '8px 2px',
-                fontSize: '0.75rem',
+                fontSize: '0.72rem',
                 fontWeight: 600,
-                color: 'var(--text-primary)',
-                background: 'rgba(255, 255, 255, 0.04)',
-                border: '1px solid var(--border-color)',
+                color: item.isAltF4 ? '#fca5a5' : 'var(--text-primary)',
+                background: item.isAltF4 ? 'rgba(239, 68, 68, 0.14)' : 'rgba(255, 255, 255, 0.04)',
+                border: item.isAltF4 ? '1px solid rgba(239, 68, 68, 0.35)' : '1px solid var(--border-color)',
                 borderRadius: 'var(--radius-sm)',
                 cursor: 'pointer',
                 textAlign: 'center',
